@@ -2,13 +2,16 @@
 Module For Computing Financial Technical Indicators.
 In each function's docstring there has been an attempt
 to mathematically define the computed indicator. Thus
-Latex Notation is chosen while all indicators are represented
-as time series.
+Latex Notation is chosen while all indicators are defined
+as timeseries.
 
     Common Notation:
         xc_t -> Closing price 
         xh_t -> High price 
         xl_t -> Low price 
+
+    Note: All indicators have the same shape as the financial timeseries.
+    Thus the computed pd.Series are filled with np.nan when necessary.
 """
 
 import numpy as np
@@ -23,15 +26,13 @@ def momentum(xc, k):
             k -> timeseries lag
 
         Output:
-            kmomem -> A pd.Series obj representing m_t(k). 
-            kmomem obj has the same shape as xc obj,
-            filled when np.nan when necessary.
+            A pd.Series obj representing m_t(k). 
     """
     kmomem = xc - xc.shift(k)
     return kmomem
 
 
-def stochastic(xh, xl, xc, l):
+def stochastic(xh, xl, xc, l = 14):
     """
     Computes stochastic indicator: 
         L_t(l) = min(xl_t, xl_{t - 1}, \dots, xl_{t - l + 1})
@@ -45,8 +46,7 @@ def stochastic(xh, xl, xc, l):
         l -> timeseries lag 
 
     Output:
-        stoch -> A pd.Series obj representing stoch_t(l). stoch
-        has the same shape as xc, xl, xh, filled with np.nan when necessary.
+        A pd.Series obj representing stoch_t(l). 
     """
     stoch = np.zeros(len(xc))
     stoch[: l - 1] = np.nan
@@ -56,7 +56,7 @@ def stochastic(xh, xl, xc, l):
             
     return pd.Series(stoch)
 
-def williams(xh, xc, xl, l):
+def williams(xh, xl, xc, l = 14):
     """
     Computes William's R indicator:
         L_t(l) = min(xl_t, xl_{t - 1}, \dots, xl_{t - l + 1})
@@ -70,8 +70,7 @@ def williams(xh, xc, xl, l):
         l -> timeseries lag
 
     Output:
-        williams -> A pd.Series obj representing williams_t(l). williams
-        has the same shape as xc, xl, xh, filled with np.nan when necessary.
+        A pd.Series obj representing williams_t(l).
     """
     williams = np.zeros(len(xc))
     williams[: l - 1] = np.nan
@@ -92,9 +91,7 @@ def roc(xc, k):
         k -> timeseries lag
 
     Output:
-       roc -> A pd.Series obj representing roc_t(k). roc has
-       the same shape as xc, filled with np.nan when necessary.
-
+       roc -> A pd.Series obj representing roc_t(k).
     """
     return (xc - xc.shift(k)) / xc.shift(k)
 
@@ -109,8 +106,7 @@ def moving_avg(xc, q):
         q -> Filter's Length
 
     Output:
-        ma -> A pd.Series obj representing ma_t(q). ma has the same shape
-        as xc, filled with np.nan when necessary.
+        A pd.Series obj representing ma_t(q). 
     """
 
     kernel = (1 / q) * np.ones(q) 
@@ -118,10 +114,10 @@ def moving_avg(xc, q):
     ma = np.concatenate((np.array([np.nan] * (q - 1)), np.convolve(kernel, xc, 'valid')))
     return pd.Series(ma)
 
-def exp_moving_avg(xc, q, a = 0.65):
+def exp_moving_avg(xc, q, a = 0.5):
     """
     Computes Exponential Moving Average(q):
-        ema_t(q) = \sum_{i = 0}^{q - 1} a(1 - a)^{i} xc_{t - i}
+        ema_t(q; a) = \sum_{i = 0}^{q - 1} a(1 - a)^{i} xc_{t - i}
 
     Params:
         xc -> A pd.Series obj representing xc_t
@@ -129,14 +125,88 @@ def exp_moving_avg(xc, q, a = 0.65):
         a -> Exponential Coefficient
 
     Output:
-        ema -> A pd.Series obj representing ema_t(q). ema has the same shape
-        as xc, filled with np.nan when necessary.
+        A pd.Series obj representing ema_t(q; a).
     """
 
     kernel = a * (1 - a) ** np.arange(q)
+
+    # Normalize kernel weights so that the sum of all weights equates to one.
+    kernel = kernel / np.sum(kernel)
 
     # Note: Correlation operation equates to Convolution operation without
     # kernel flipping. By default np.correlate performs 'valid' correlation.
 
     ema = np.concatenate((np.array([np.nan] * (q - 1)), np.correlate(kernel, xc)))
     return pd.Series(ema)
+
+def macd(xc, q1 = 12, q2 = 26, a = 0.5):
+    """
+    Computes Moving Average Convergence Divergence:
+        macd_t(q1, q2; a) = ema_t(q1; a) - ema_t(q2; a), q1 < q2 
+
+    Params:
+        xc -> A pd.Series obj representing xc_t
+        q1 -> First ema filter's length
+        q2 -> Second ema filter's length
+        a -> ema exponential coefficient
+    
+    Output:
+        A pd.Series obj representing macd_t(q1, q2; a).
+    """
+
+    if q1 >= q2:
+        print('Warning: macd(xc, q1, q2, a): \n\t q2 ought to be greater than q1')
+    return pd.Series(exp_moving_avg(xc, q1, a) - exp_moving_avg(xc, q2, a))
+
+def bollinger(xh, xl, xc, q = 20, m = 2):
+    """
+    Computes Bollinger Bands:
+        xt_t = (xh_t + xl_t + xc_t) / 3 
+        a_t(q) = \frac{1}{q} \sum{i = 0}^{q - 1}xt_{t - i} 
+        S_t(q) = \sqrt{\frac{1}{q} \sum_{i = 0}^{q - 1} (xt_{t - i} - a_t(q))^2} 
+
+        BU_t(q, m) = a_t(q) + m S_t(q) 
+        BL_t(q,m) = a_t(q) - m S_t(q) 
+
+    Params:
+        xh -> A pd.Series obj representing xh_t
+        xl -> A pd.Series obj representing xl_t
+        xc -> A pd.Series obj representing xc_t
+        q -> Moving Average Lag
+        m -> Bollinger std multiplier
+
+    Output:
+        A tuple (BU, BL) of pd.Series representing upper and lower band respectively.
+    """
+
+    xt = (xh + xl + xc) / 3
+    typical_price_ma = moving_avg(xt, q)
+
+    typical_price_partial_std = np.zeros(len(xt))
+    typical_price_partial_std[:q - 1] = np.nan
+
+    for t in range(q - 1, len(xt)):
+        typical_price_partial_std[t] = np.std(xt[t - q + 1: t + 1]) 
+    
+    bollinger_upper = pd.Series(typical_price_ma + m * typical_price_partial_std)
+    bollinger_lower = pd.Series(typical_price_ma - m * typical_price_partial_std)
+
+    return bollinger_upper, bollinger_lower
+
+
+
+############################# Test Zone  #############################
+if __name__ == '__main__':     
+    eurusd = pd.read_csv('EURUSD.csv')
+    xh = eurusd['EURUSD_High']
+    xl = eurusd['EURUSD_Low']
+    xc = eurusd['EURUSD_Close']
+    xo = eurusd['EURUSD_Open']
+    
+    BU, BL = bollinger(xh, xl, xc)
+    print(BU[:19])
+    print(BL[:19])
+    print(BL[19:30])
+    print(BU[19:30])
+    print(BU.head)
+    print(BL.head)
