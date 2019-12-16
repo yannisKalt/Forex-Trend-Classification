@@ -5,7 +5,8 @@ to mathematically define the computed indicator. Thus
 Latex Notation is chosen while all indicators are defined
 as timeseries.
 
-    Common Notation:
+    Common Timeseries Notation:
+        xo_t -> Open price
         xc_t -> Closing price 
         xh_t -> High price 
         xl_t -> Low price 
@@ -23,14 +24,12 @@ def momentum(xc, k):
 
         Params:
             xc -> A pd.Series obj representing xc_t.
-            k -> timeseries lag
+            k -> Time window lag
 
         Output:
             A pd.Series obj representing m_t(k). 
     """
-    kmomem = xc - xc.shift(k)
-    return kmomem
-
+    return  xc - xc.shift(k)
 
 def stochastic(xh, xl, xc, l = 14):
     """
@@ -43,7 +42,7 @@ def stochastic(xh, xl, xc, l = 14):
         xc -> A pd.Series obj representing xc_t
         xl -> A pd.Series obj representing xl_t
         xh -> A pd.Series obj representing xh_t
-        l -> timeseries lag 
+        l -> Time window lag 
 
     Output:
         A pd.Series obj representing stoch_t(l). 
@@ -67,7 +66,7 @@ def williams(xh, xl, xc, l = 14):
         xc -> A pd.Series obj representing xc_t
         xl -> A pd.Series obj representing xl_t
         xh -> A pd.Series obj representing xh_t
-        l -> timeseries lag
+        l -> Time window lag
 
     Output:
         A pd.Series obj representing williams_t(l).
@@ -88,7 +87,7 @@ def roc(xc, k):
 
     Params:
         xc -> A pd.Series obj representing xc_t
-        k -> timeseries lag
+        k -> Time window lag
 
     Output:
        roc -> A pd.Series obj representing roc_t(k).
@@ -103,7 +102,7 @@ def moving_avg(xc, q):
 
     Params:
         xc -> A pd.Series obj representing xc_t
-        q -> Filter's Length
+        q -> Time window lag
 
     Output:
         A pd.Series obj representing ma_t(q). 
@@ -121,7 +120,7 @@ def exp_moving_avg(xc, q, a = 0.5):
 
     Params:
         xc -> A pd.Series obj representing xc_t
-        q -> Filter's Length
+        q -> Time window lag
         a -> Exponential Coefficient
 
     Output:
@@ -146,8 +145,8 @@ def macd(xc, q1 = 12, q2 = 26, a = 0.5):
 
     Params:
         xc -> A pd.Series obj representing xc_t
-        q1 -> First ema filter's length
-        q2 -> Second ema filter's length
+        q1 -> First ema time window lag
+        q2 -> Second ema time window lag
         a -> ema exponential coefficient
     
     Output:
@@ -172,7 +171,7 @@ def bollinger(xh, xl, xc, q = 20, m = 2):
         xh -> A pd.Series obj representing xh_t
         xl -> A pd.Series obj representing xl_t
         xc -> A pd.Series obj representing xc_t
-        q -> Moving Average Lag
+        q -> Time window lag
         m -> Bollinger std multiplier
 
     Output:
@@ -194,6 +193,36 @@ def bollinger(xh, xl, xc, q = 20, m = 2):
     return bollinger_upper, bollinger_lower
 
 
+def rsi(xc, q = 14):
+    """
+    Computes Relative Strength Index:
+        RS_t(q) = \frac{\sum_{i = 0}^{q - 1} m_{t - i}(1)|_{m_{t - i}(1) > 0}}
+                       {-\sum_{i = 0}^{q - 1} m_{t - i}(1)|_{m_{t - i}(1) < 0}}
+        where m_t(k) is the momentum indicator.
+
+        rsi_t(q) = RS_t(q) / (1 + RS_t(q))
+
+    Params:
+        xc -> A pd.Series obj representing xc_t
+        q -> Time Window Lag
+    """
+    momentum1_index = momentum(xc, 1)
+    rsi_index = np.zeros(len(momentum1_index))
+    rsi_index[:q - 1] = np.nan
+    for i in range(q - 1, len(momentum1_index)):
+        cum_increase = np.sum([x for x in momentum1_index[i - q + 1: i + 1] if x > 0])
+        cum_decrease = -np.sum([x for x in momentum1_index[i - q + 1: i + 1] if x < 0])
+       
+        if cum_decrease == 0 and cum_increase == 0:
+            rsi_index[i] = 0.5
+        elif cum_decrease == 0:
+            rsi_index[i] = 1
+        else:
+            RS = cum_increase / cum_decrease
+            rsi_index[i] = RS / (1 + RS)
+        
+    return pd.Series(rsi_index) 
+
 
 ############################# Test Zone  #############################
 if __name__ == '__main__':     
@@ -202,11 +231,4 @@ if __name__ == '__main__':
     xl = eurusd['EURUSD_Low']
     xc = eurusd['EURUSD_Close']
     xo = eurusd['EURUSD_Open']
-    
-    BU, BL = bollinger(xh, xl, xc)
-    print(BU[:19])
-    print(BL[:19])
-    print(BL[19:30])
-    print(BU[19:30])
-    print(BU.head)
-    print(BL.head)
+
