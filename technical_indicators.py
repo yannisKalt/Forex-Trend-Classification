@@ -17,6 +17,7 @@ as timeseries.
 
 import numpy as np
 import pandas as pd
+import os
 
 def momentum(xc, k):
     """
@@ -204,7 +205,7 @@ def rsi(xc, q = 14):
 
     Params:
         xc -> A pd.Series obj representing xc_t
-        q -> Time Window Lag
+        q -> Time window lag
     """
     momentum1_index = momentum(xc, 1)
     rsi_index = np.zeros(len(momentum1_index))
@@ -223,12 +224,35 @@ def rsi(xc, q = 14):
         
     return pd.Series(rsi_index) 
 
+def atr(xh, xl, k = 14):
+    """ 
+    Computes Average True Range indicator:
+        ATR_t(k) = \frac{k - 1}{k} ATR_{t - 1}(k) + \frac{1}{k}(xh_k - xl_k), 
+        ATR_{k - 1}(k) = \sum_{i = 0}^{k - 1}(xh_i - xl_i)
+    
+    Params:
+        xh -> A pd.Series obj representing xh_t
+        xl -> A pd.Series obj representing xh_t
+        k -> Time window lag
+    """
+    ATR = np.zeros(len(xh))
+    ATR[:k - 1] = np.nan
+    ATR[k - 1] = np.mean(xh[:k] - xl[:k])
+    for i in range(k, len(ATR)):
+        ATR[i] = ((k - 1) / k) * ATR[i - 1] + (1 / k) * (xh[i] - xl[i])
+        
+    return pd.Series(ATR)
 
 ############################# Test Zone  #############################
 if __name__ == '__main__':     
+    os.chdir('currency_pair_csv')
     eurusd = pd.read_csv('EURUSD.csv')
     xh = eurusd['EURUSD_High']
     xl = eurusd['EURUSD_Low']
     xc = eurusd['EURUSD_Close']
     xo = eurusd['EURUSD_Open']
 
+    ROC = roc(xc, 1)
+    print(ROC)
+    print(max(ROC))
+    print(min(ROC))
