@@ -4,7 +4,7 @@ from sklearn.feature_selection import mutual_info_regression as MIC
 from sklearn.model_selection import KFold
 from sklearn.svm import SVC
 
-def mRrR(X, Y, clf, n):
+def mRmR(X, Y, clf, n):
     """
     Feature Subset Selection Via Ensemble Method 'Max-Relevance, Min-Redundancy'
     Works only for continuous features, categorical labels.
@@ -65,13 +65,11 @@ def mRrR(X, Y, clf, n):
     found_better_subset = True
 
     while found_better_subset and len(best_feature_subset) > 1:
-        print('Best Feature Subset Scored: ', best_subset_score)
         feature_subsets = [best_feature_subset[:k] + best_feature_subset[k + 1:] 
                                        for k in range(len(best_feature_subset))]
         feature_subset_scores = []
 
         for feature_set in feature_subsets:
-            print('\tChecking Possible Subsets') 
             kf = KFold(n_splits = 5)
             avg_accuracy = 0
             for train_index, test_index in kf.split(X, Y):
@@ -80,18 +78,10 @@ def mRrR(X, Y, clf, n):
             feature_subset_scores.append(avg_accuracy / 5)
         
         if np.any(feature_subset_scores > best_subset_score):
-            print('\tFound Better Subset')
             best_subset_score = np.max(feature_subset_scores)
             best_feature_subset = feature_subsets[np.argmax(feature_subset_scores)]
         else:
             found_better_subset = False
 
     return best_feature_subset
-
-if __name__ == '__main__':
-    from sklearn.datasets import load_breast_cancer
-    dataset = load_breast_cancer()
-    X = dataset.data
-    Y = dataset.target
-    feature_sets = mRMR(X,Y,SVC(),20)
 
